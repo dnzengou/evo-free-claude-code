@@ -25,8 +25,15 @@ from core.anthropic import (
 from core.anthropic.sse import ANTHROPIC_SSE_RESPONSE_HEADERS
 from core.trace import api_messages_request_snapshot, trace_event, traced_async_stream
 from providers.base import BaseProvider
-from providers.exceptions import InvalidRequestError, ProviderError
+from providers.exceptions import (
+    AuthenticationError,
+    InvalidRequestError,
+    ProviderError,
+    RateLimitError,
+    ServiceUnavailableError,
+)
 
+from . import metrics, pricing, skillopt, trajectory
 from . import evo_router, metrics
 from .model_router import ModelRouter, RoutedMessagesRequest
 from .models.anthropic import MessagesRequest, TokenCountRequest
@@ -76,6 +83,8 @@ async def _metered_stream(
     provider_id: str,
     model: str,
     input_tokens: int,
+    skill: str = "chat",
+    thinking_enabled: bool = False,
     model_ref: str,
 ) -> AsyncIterator[str]:
     """Wrap a provider SSE stream to record metrics + evo-router fitness."""
@@ -122,6 +131,21 @@ async def _metered_stream(
             latency_ms=latency_ms,
             status=status,
         )
+        if trajectory.is_enabled():
+            trajectory.record(
+                request_id=request_id,
+                provider_id=provider_id,
+                model=model,
+                skill=skill,
+                thinking_enabled=thinking_enabled,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                latency_ms=latency_ms,
+                cost_usd=pricing.estimate_cost_usd(
+                    provider_id, model, input_tokens, output_tokens
+                ),
+                status=status,
+            )
         if record_fitness:
             evo_router.record_outcome(
                 model_ref,
@@ -306,6 +330,64 @@ def _require_non_empty_messages(messages: list[Any]) -> None:
         raise InvalidRequestError("messages cannot be empty")
 
 
+_RETRIABLE_PREFLIGHT_ERRORS: tuple[type[BaseException], ...] = (
+    AuthenticationError,
+    ServiceUnavailableError,
+    RateLimitError,
+)
+
+
+def _preflight_with_fallbacks(
+    *,
+    original_request: MessagesRequest,
+    original_model: str,
+    primary_routed: RoutedMessagesRequest,
+    fallback_refs: tuple[str, ...],
+    router: ModelRouter,
+    provider_getter: ProviderGetter,
+) -> tuple[RoutedMessagesRequest, BaseProvider]:
+    """Try the primary resolution first, then each SkillOpt fallback ref.
+
+    Returns ``(routed, provider)`` for the first candidate that passes
+    ``preflight_stream``. Re-raises the primary's error when every
+    candidate fails, so callers see the same exception they would have
+    seen without SkillOpt enabled.
+    """
+    candidates: list[RoutedMessagesRequest] = [primary_routed]
+    for ref in fallback_refs:
+        try:
+            candidates.append(
+                router.rebind_messages_request(
+                    original_request, ref, original_model=original_model
+                )
+            )
+        except ValueError:
+            logger.warning("SkillOpt fallback skipped: unknown provider in '{}'", ref)
+
+    first_error: BaseException | None = None
+    for candidate in candidates:
+        resolved = candidate.resolved
+        provider = provider_getter(resolved.provider_id)
+        try:
+            provider.preflight_stream(
+                candidate.request,
+                thinking_enabled=resolved.thinking_enabled,
+            )
+            return candidate, provider
+        except _RETRIABLE_PREFLIGHT_ERRORS as exc:
+            logger.warning(
+                "SkillOpt fallback: provider='{}' failed preflight ({})",
+                resolved.provider_id,
+                type(exc).__name__,
+            )
+            if first_error is None:
+                first_error = exc
+            continue
+
+    assert first_error is not None  # loop had at least one candidate
+    raise first_error
+
+
 class ClaudeProxyService:
     """Coordinate request optimization, model routing, token count, and providers."""
 
@@ -367,7 +449,12 @@ class ClaudeProxyService:
         try:
             _require_non_empty_messages(request_data.messages)
 
-            routed = self._model_router.resolve_messages_request(request_data)
+            skill = trajectory.infer_skill(
+                request_data.messages, request_data.tools
+            )
+            routed = self._model_router.resolve_messages_request(
+                request_data, skill=skill
+            )
             if routed.resolved.provider_id in _OPENAI_CHAT_UPSTREAM_IDS:
                 tool_err = openai_chat_upstream_server_tool_error(
                     routed.request,
@@ -412,6 +499,14 @@ class ClaudeProxyService:
                 return optimized
             logger.debug("No optimization matched, routing to provider")
 
+            routed, provider = _preflight_with_fallbacks(
+                original_request=request_data,
+                original_model=request_data.model,
+                primary_routed=routed,
+                fallback_refs=skillopt.fallbacks(skill),
+                router=self._model_router,
+                provider_getter=self._provider_getter,
+            )
             failover_on = self._settings.failover_enabled
             if failover_on:
                 attempts = self._build_route_attempts(routed, request_data)
@@ -493,6 +588,8 @@ class ClaudeProxyService:
                     provider_id=routed.resolved.provider_id,
                     model=routed.request.model,
                     input_tokens=input_tokens,
+                    skill=skill,
+                    thinking_enabled=routed.resolved.thinking_enabled,
                     model_ref=routed.resolved.provider_model_ref,
                 )
                 return anthropic_sse_streaming_response(metered)

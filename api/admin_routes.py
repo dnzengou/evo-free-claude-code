@@ -18,8 +18,12 @@ from config.settings import Settings
 from config.settings import get_settings as get_cached_settings
 from providers.registry import ProviderRegistry
 
+from . import auto_forge as _auto_forge
 from . import health_history as _health_history
 from . import metrics as _metrics
+from . import pricing as _pricing
+from . import skillopt as _skillopt
+from . import trajectory as _trajectory
 from .admin_config import (
     FIELD_BY_KEY,
     load_config_response,
@@ -168,6 +172,7 @@ async def get_metrics(request: Request):
     avg_ms = round(sum(latencies) / len(latencies), 1) if latencies else 0.0
     sorted_lat = sorted(latencies)
     p95_ms = sorted_lat[int(len(sorted_lat) * 0.95)] if sorted_lat else 0.0
+    cost = _pricing.summarize(entries)
     return {
         "requests": list(reversed(entries)),
         "summary": {
@@ -176,8 +181,45 @@ async def get_metrics(request: Request):
             "p95_latency_ms": round(p95_ms, 1),
             "total_input_tokens": sum(e["input_tokens"] for e in entries),
             "total_output_tokens": sum(e["output_tokens"] for e in entries),
+            "total_cost_usd": cost["total_usd"],
+            "per_provider_cost_usd": cost["per_provider_usd"],
         },
     }
+
+
+@router.get("/admin/api/trajectory")
+async def get_trajectory_summary(request: Request):
+    """Return the EvoMetaClaw trajectory rollup (loopback-only, non-sensitive)."""
+    require_loopback_admin(request)
+    return _trajectory.summary()
+
+
+@router.get("/admin/api/skillopt")
+async def get_skillopt_policy(request: Request):
+    """Return the currently loaded SkillOpt policy snapshot."""
+    require_loopback_admin(request)
+    return _skillopt.snapshot()
+
+
+@router.get("/admin/api/auto-forge")
+async def get_auto_forge_state(request: Request):
+    """Return the periodic auto-forge loop's observable state."""
+    require_loopback_admin(request)
+    return _auto_forge.snapshot()
+
+
+@router.post("/admin/api/skillopt/forge")
+async def trigger_forge_now(request: Request):
+    """Run EvoForge immediately, outside the schedule.
+
+    After writing the policy, invalidate the SkillOpt mtime cache so
+    the very next request picks up the new routing without waiting for
+    the normal mtime check.
+    """
+    require_loopback_admin(request)
+    result = await _auto_forge.run_now()
+    _skillopt.invalidate_cache()
+    return result
 
 
 @router.get("/admin/api/providers/local-status")
