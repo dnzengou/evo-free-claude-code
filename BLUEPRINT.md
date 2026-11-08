@@ -1,5 +1,6 @@
 # Free Claude Code — Project Blueprint
 **Version:** 2.4.0 · **Updated:** 2026-10-29 · **Python:** 3.14.0
+**Version:** 2.0.0 · **Updated:** 2026-07-18 · **Python:** 3.14.0
 **Live:** https://free-claude-code-main-ebon.vercel.app · **Repo:** https://github.com/dnzengou/free-claude-code
 
 ---
@@ -57,7 +58,7 @@ Claude Code CLI / VS Code / JetBrains ACP
 | `config/` | Settings (`pydantic-settings`), provider catalog, logging config, paths |
 | `messaging/` | Discord/Telegram platforms, session trees, voice transcription |
 | `cli/` | `fcc-server`, `fcc-claude`, `fcc-init` entry points; process registry |
-| `tests/` | 1443 unit, contract, and integration tests |
+| `tests/` | 1462 unit, contract, and integration tests |
 
 ---
 
@@ -259,6 +260,7 @@ All enforced in `.github/workflows/tests.yml` on push/PR to `main`/`master`:
 | ruff-check | `uv run ruff check` | ✅ |
 | ty | `uv run ty check` | ✅ |
 | pytest | `uv run pytest -v --tb=short` | ✅ 1443 baseline + 27 new (skillopt/evoforge/pricing/trajectory/admin) |
+| pytest | `uv run pytest -v --tb=short` | ✅ 1462/1462 |
 
 ---
 
@@ -292,6 +294,7 @@ All enforced in `.github/workflows/tests.yml` on push/PR to `main`/`master`:
 - [x] **Periodic auto-forge** — `api/auto_forge.py` background task that calls `evoforge.run` every `AUTO_FORGE_INTERVAL_HOURS` (default 24, floor 60s). `AUTO_FORGE_ENABLED=1` to turn on; `POST /admin/api/skillopt/forge` triggers an immediate run and invalidates the SkillOpt mtime cache so the policy takes effect on the next request. Serverless-safe: a read-only-FS OSError disables the loop for the process without crashing.
 - [x] **Agent-detectable discovery** — `/llms.txt`, `/llms-full.txt`, `/.well-known/{ai-plugin,agents,mcp}.json`, `/robots.txt`; OpenAPI info block renamed to describe the service
 - [x] **Ecosystem integration guide (`ECOSYSTEM.md`)** — four deployment patterns + cross-service EvoMetaClaw flywheel
+- [x] **Failover + evo-router** — `FAILOVER_MODELS` chain retries pre-stream provider errors transparently; `api/evo_router.py` records per-ref fitness (recency-weighted success + latency penalty) with a circuit-breaker cooldown; `EVO_ROUTING=1` orders candidates by observed fitness
 
 ### Planned 🔲
 - [ ] **In-stream fallback** — current fallback traversal catches only `preflight_stream` failures; mid-stream disconnect still bubbles up. Needs a resumable SSE wrapper that buffers the first N bytes before committing to a candidate.
@@ -334,6 +337,12 @@ All enforced in `.github/workflows/tests.yml` on push/PR to `main`/`master`:
 - **Metrics enrichment**: `/admin/api/metrics` summary now includes `total_cost_usd` and `per_provider_cost_usd`; Metrics tab gets a 5th summary card and an EvoMetaClaw panel with recording/disabled pill + skill chips.
 - **Service integration**: `_metered_stream` now emits one trajectory row per completed request (or error), pre-tagged with the inferred skill and priced against the pricing catalog. `create_message` computes the skill tag before wrapping the stream so both the metric and the trajectory carry the same label.
 - **Tests**: 11 new tests — pricing lookups & summarize (6), trajectory disable/enable/rotation/skill inference (7 sub-cases), admin `/trajectory` endpoint + loopback guard (2), metrics cost fields (1).
+### v2.0.0 — 2026-07-18 (failover + evo-router)
+- **Transparent failover**: `FAILOVER_MODELS=openai/gpt-4o,open_router/anthropic/claude-3-5-sonnet` opts in a retry chain. `ClaudeProxyService.create_message` peeks the first chunk of each candidate; a `ProviderError` raised BEFORE any byte reaches the client causes the loop to advance to the next candidate. Mid-stream errors always stay in-band. When every candidate fails, an Anthropic-shaped `message_start / text-block / message_stop` SSE lifecycle is emitted so clients see a clean error instead of a truncated connection.
+- **Provider escalation flag**: `ProviderConfig.escalate_pre_stream_errors` (auto-enabled when `FAILOVER_MODELS` is set) makes `AnthropicMessagesTransport` and `OpenAIChatTransport` raise the mapped `ProviderError` on pre-stream failure. `OpenAIChatTransport.stream_response` also delays the `message_start` yield until after `_create_stream()` succeeds, so a failed candidate emits zero bytes.
+- **Evo router (`api/evo_router.py`)**: per-`provider/model` recency-weighted success rate (decay 0.9) with a latency penalty and a 3-consecutive-failure / 60 s circuit-breaker cooldown. `record_outcome()` is called from `_metered_stream` (winners) and the failover loop (skipped candidates). Persisted to `${FCC_CACHE_DIR:-~/.fcc-cache}/evo_fitness.json`; serverless-safe (disables on read-only FS).
+- **`EVO_ROUTING=1`**: when set alongside `FAILOVER_MODELS`, `rank()` orders candidates by fitness instead of configured order. Cooldown refs are moved to the back rather than dropped, so a fully-broken chain still attempts every entry.
+- **CI**: 1462/1462 passing (19 new tests: 13 for evo_router unit behaviour, 6 for failover integration + settings validation). All 4 gates green.
 
 ### v2.0.0 — 2026-06-15 (audit + ty)
 - **`ty` regression fix**: removed redundant `health_history = importlib.reload(health_history)` reassignments in `tests/api/test_admin.py` (3 sites). `importlib.reload()` mutates the module in place, so the rebinding only confused ty's narrowed-import type with the generic `ModuleType` return — no `# type: ignore` added (CLAUDE.md hard rule).
