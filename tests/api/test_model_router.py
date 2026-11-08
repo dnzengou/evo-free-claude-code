@@ -227,13 +227,9 @@ def test_model_router_skill_hint_overrides_when_skillopt_enabled(
     monkeypatch.setenv("FCC_CACHE_DIR", str(tmp_path))
     policy = {
         "version": 1,
-        "policies": {
-            "edit": {"primary": "open_router/deepseek/r1", "fallbacks": []}
-        },
+        "policies": {"edit": {"primary": "open_router/deepseek/r1", "fallbacks": []}},
     }
-    (tmp_path / "skillopt_policy.json").write_text(
-        json.dumps(policy), encoding="utf-8"
-    )
+    (tmp_path / "skillopt_policy.json").write_text(json.dumps(policy), encoding="utf-8")
     from api import skillopt
 
     skillopt.invalidate_cache()

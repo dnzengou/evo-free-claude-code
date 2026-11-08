@@ -1,64 +1,114 @@
 # Free Claude Code — Project Blueprint
-**Version:** 2.4.0 · **Updated:** 2026-10-29 · **Python:** 3.14.0
-**Version:** 2.0.0 · **Updated:** 2026-07-18 · **Python:** 3.14.0
+**Version:** 2.5.0 · **Updated:** 2026-11-08 · **Python:** 3.14.0
 **Live:** https://free-claude-code-main-ebon.vercel.app · **Repo:** https://github.com/dnzengou/free-claude-code
 
 ---
 
 ## Executive Summary
 
-Drop-in Anthropic Messages API proxy that routes Claude Code CLI traffic to 18 provider backends. Keeps Claude Code's client-side protocol stable while swapping the underlying model. Ships with a local Admin UI, Discord/Telegram bot wrapper, and optional voice-note transcription.
+Free Claude Code (FCC) is an Anthropic Messages API proxy that routes Claude Code CLI, VS Code, JetBrains ACP, Discord and Telegram traffic to **18 provider backends** while keeping the Anthropic wire format intact on the client side.
+
+The project is organised around **three stacked pillars** that compound into a durable moat:
+
+1. **EvoMetaClaw** — every completed request emits a JSONL trajectory row tagged with the inferred *skill*, cost, latency, tokens, and (new in v2.5.0) a commercial-intent agent fingerprint so GTM, sales and marketing can read the same corpus their routing does.
+2. **EvoForge** — an offline, deterministic pipeline that aggregates the trajectory corpus by `(skill, provider, model)`, scores each candidate `-λ_cost·avg_cost - λ_lat·p95 + λ_success·ok_rate`, and publishes a versioned `skillopt_policy.json` atomically. A periodic auto-forge loop (`AUTO_FORGE_ENABLED=1`) closes the flywheel so policies improve while no one is looking.
+3. **SkillOpt** — a runtime consumer of the EvoForge policy. It narrows routing per inferred skill, with ordered `fallbacks[]` traversal on retriable preflight errors, and an always-opt-in kill switch (`SKILLOPT_ENABLED=0` by default) so fresh installs behave identically to a plain proxy.
+
+Around that stack sit the **agent-detectable discovery surface** (`llms.txt`, `llms-full.txt`, `/.well-known/{ai-plugin,agents,mcp,agents-registry,commerce}.json`, JSON-LD Service schema, `sitemap.xml`, `robots.txt`) so an LLM inside Claude, ChatGPT, Perplexity or Gemini can find this instance, learn its capabilities and its commercial intents (self-host / API / support), and call it without a human intermediary. OpenClaw-style forks can copy the wire protocol; they cannot copy months of real trajectory data, skill-conditioned policies, or the agent-SEO footprint.
+
+Every enhancement is **always opt-in**: if an operator flips no flags, FCC behaves exactly like a plain proxy with its admin UI loopback-locked.
 
 ---
 
 ## Architecture
 
 ```
-Claude Code CLI / VS Code / JetBrains ACP
-        │  Anthropic Messages API
-        ▼
-┌─────────────────────────────────────────┐
-│           FastAPI Proxy (server.py)     │
-│  ┌──────────┐  ┌──────────────────────┐ │
-│  │  /admin  │  │  /v1/messages        │ │
-│  │  Admin   │  │  /v1/models          │ │
-│  │  UI      │  │  /v1/messages/count  │ │
-│  └──────────┘  └──────────┬───────────┘ │
-│                           │             │
-│  ┌────────────────────────▼───────────┐ │
-│  │         Model Router               │ │
-│  │  Opus → MODEL_OPUS                 │ │
-│  │  Sonnet → MODEL_SONNET             │ │
-│  │  Haiku → MODEL_HAIKU               │ │
-│  │  * → MODEL (fallback)              │ │
-│  └────────────────────────┬───────────┘ │
-└───────────────────────────┼─────────────┘
-                            │
-        ┌───────────────────┼───────────────────┐
-        ▼                   ▼                   ▼
- AnthropicMessages    OpenAICompat         Local
- Transport            Transport            Providers
- (DeepSeek, Kimi,    (NIM, OpenRouter,    (LM Studio,
-  Wafer, Fireworks,   Gemini, Groq,        llama.cpp,
-  Z.ai)              Cerebras, Mistral,    Ollama)
-                      OpenCode, Codestral)
+          AI agents / crawlers (GPTBot, ClaudeBot, PerplexityBot,         (A) agent discovery
+          Google-Extended, generic LLM runtimes) ─── GET /llms.txt,  ───────────────┐
+                                                        /.well-known/*               │
+                                                                                     │
+                                                                                     ▼
+ Claude Code CLI / VS Code / JetBrains ACP / Discord / Telegram ──►┌─────────────────────────────────┐
+                              Anthropic Messages API               │   FastAPI Proxy (server.py)     │
+                                                                   │  ┌──────────┐  ┌─────────────┐  │
+                                                                   │  │ /admin   │  │ /v1/*       │  │
+                                                                   │  │ loopback │  │ Anthropic   │  │
+                                                                   │  │ only     │  │ Messages    │  │
+                                                                   │  └──────────┘  └──────┬──────┘  │
+                                                                   │                       │          │
+                                                                   │   ┌───────────────────▼──────┐  │
+                                                                   │   │ ModelRouter.resolve      │  │
+                                                                   │   │  1. direct slug wins     │  │
+                                                                   │   │  2. SkillOpt per-skill   │  │
+                                                                   │   │  3. MODEL_OPUS/SONNET/   │  │
+                                                                   │   │     HAIKU tier override  │  │
+                                                                   │   │  4. MODEL fallback       │  │
+                                                                   │   └──────┬──────────┬────────┘  │
+                                                                   │          │          │           │
+                                                                   │   preflight_stream + fallbacks   │
+                                                                   │   evo_router fitness (optional)  │
+                                                                   └──────────┼──────────┼───────────┘
+                                                                              │          │
+                                             ┌────────────────────────────────┤          │
+                                             │                                │          │
+                             AnthropicMessagesTransport        OpenAIChatTransport        Local
+                             (DeepSeek, Kimi, Wafer,         (NIM, OpenRouter, Gemini,   providers
+                              Fireworks, Z.ai)                Groq, Cerebras, Mistral,   (LM Studio,
+                                                              Mistral Codestral,          llama.cpp,
+                                                              OpenCode, OpenCode Go,       Ollama)
+                                                              OpenAI)
+                                             │
+                      per-request ─────────┬─┴──────────────┐
+                                           ▼                ▼
+                               _metered_stream        trajectories.jsonl
+                                 metrics.record      (EvoMetaClaw, opt-in)
+                                                                │
+                                                                ▼
+                                        ┌──────────────────────────────────────────┐
+                                        │     offline — EvoForge (auto or cron)     │
+                                        │  ingest → aggregate → score → policy      │
+                                        └──────────────────────┬───────────────────┘
+                                                               │
+                                                               ▼
+                                              skillopt_policy.json (atomic rename)
+                                                               │
+                                                               ▼
+                                                 mtime-cached by SkillOpt — next request
+                                                 picks it up with no gateway restart
 ```
 
 ---
 
 ## Module Map
 
-| Package | Responsibility |
+| File | Responsibility |
 |---|---|
-| `server.py` | ASGI entry point — `create_asgi_app()` |
-| `api/` | FastAPI routes, admin UI, services, model routing, request optimizations |
+| `server.py` | ASGI entry point — `create_asgi_app()` with graceful lifespan failure reporting |
+| `api/app.py` | FastAPI factory; exception handlers; discovery + admin router mounts |
+| `api/routes.py` | Public `/v1/*` routes (messages, count_tokens, models, health) |
+| `api/admin_routes.py` | Loopback-only `/admin/*` routes (config, metrics, trajectory, skillopt, auto-forge, skillops analytics) |
+| `api/discovery_routes.py` | **Agent-SEO** — `llms.txt`, `llms-full.txt`, `/.well-known/{ai-plugin,agents,mcp,agents-registry,commerce}.json`, `sitemap.xml`, `robots.txt`, JSON-LD Service schema |
+| `api/services.py` | `ClaudeProxyService.create_message`, `_metered_stream`, `_preflight_with_fallbacks`, failover + evo-router integration |
+| `api/model_router.py` | `ModelRouter.resolve(..., skill=…)` — direct slug > SkillOpt > MODEL_* tier > MODEL; `rebind_messages_request` for fallback candidates |
+| `api/trajectory.py` | **EvoMetaClaw** — opt-in JSONL trajectory writer with byte-cap rotation, in-memory rollup, `infer_skill` heuristic, `agent_fingerprint` + `channel` enrichment |
+| `api/pricing.py` | USD/1M-token rate cards; `estimate_cost_usd`, `summarize` |
+| `api/evoforge.py` | **EvoForge** — ingest → aggregate → score → `build_policy` → atomic write |
+| `api/skillopt.py` | **SkillOpt** — mtime-cached policy loader; `lookup`, `fallbacks`, `snapshot`, `invalidate_cache` |
+| `api/skillops_analytics.py` | Per-skill estimated savings vs. baseline; loopback-only admin snapshot |
+| `api/auto_forge.py` | Asyncio background task that re-runs EvoForge every `AUTO_FORGE_INTERVAL_HOURS` |
+| `api/metrics.py` | Bounded in-memory request deque; `/admin/api/metrics` |
+| `api/health_history.py` | Per-provider bounded deque, JSON persistence, inline sparkline data |
+| `api/evo_router.py` | Per-ref fitness (recency-weighted success + latency penalty + circuit breaker), `rank`, persistence |
+| `api/admin_static/` | Admin UI (`index.html`, `fcc.css`, `admin.js`) — toast, skeleton, metrics tab, EvoMetaClaw panel |
+| `scripts/evoforge.py` | CLI wrapper around `api/evoforge.py` with `--dry-run / --min-samples / --top-k` |
 | `core/anthropic/` | Shared Anthropic protocol: SSE, content, conversion, thinking, tokens, tools |
 | `core/` | Rate limiting, trace/logging utilities |
 | `providers/` | Provider transports (18 backends), registry, base classes, error mapping |
 | `config/` | Settings (`pydantic-settings`), provider catalog, logging config, paths |
 | `messaging/` | Discord/Telegram platforms, session trees, voice transcription |
 | `cli/` | `fcc-server`, `fcc-claude`, `fcc-init` entry points; process registry |
-| `tests/` | 1462 unit, contract, and integration tests |
+| `ECOSYSTEM.md` | Four deployment patterns (centralized, per-service sidecar, edge/Vercel, local-first) + cross-service EvoMetaClaw flywheel |
+| `tests/` | 1480+ unit, contract, and integration tests |
 
 ---
 
@@ -292,9 +342,12 @@ All enforced in `.github/workflows/tests.yml` on push/PR to `main`/`master`:
 - [x] **SkillOpt runtime routing** — `api/skillopt.py`, mtime-cached policy loader; `ModelRouter.resolve(..., skill=...)` consults it after direct-slug routing and before `MODEL_*` tier overrides; `SKILLOPT_ENABLED=0` kill switch, default off
 - [x] **SkillOpt fallback traversal** — `_preflight_with_fallbacks` walks `policies[skill].fallbacks[]` on retriable preflight errors; closes the single-provider SPOF; falls back to primary's error contract when every candidate fails
 - [x] **Periodic auto-forge** — `api/auto_forge.py` background task that calls `evoforge.run` every `AUTO_FORGE_INTERVAL_HOURS` (default 24, floor 60s). `AUTO_FORGE_ENABLED=1` to turn on; `POST /admin/api/skillopt/forge` triggers an immediate run and invalidates the SkillOpt mtime cache so the policy takes effect on the next request. Serverless-safe: a read-only-FS OSError disables the loop for the process without crashing.
-- [x] **Agent-detectable discovery** — `/llms.txt`, `/llms-full.txt`, `/.well-known/{ai-plugin,agents,mcp}.json`, `/robots.txt`; OpenAPI info block renamed to describe the service
+- [x] **Agent-detectable discovery** — `/llms.txt`, `/llms-full.txt`, `/.well-known/{ai-plugin,agents,mcp,agents-registry,commerce}.json`, `/sitemap.xml`, `/robots.txt`; JSON-LD Service schema inlined into `llms-full.txt`; OpenAPI info block renamed to describe the service
+- [x] **Commercial agent-SEO surface (v2.5.0)** — `/.well-known/agents-registry.json` publishes an agent-ready capability × pricing matrix (anthropic.messages, anthropic.count_tokens, anthropic.models, evoforge.policy); `/.well-known/commerce.json` publishes offers (self-host, hosted gateway, support, consulting) with GTM intents (adoption, sales-qualified, support-qualified); `sitemap.xml` names every public URL for AI crawler indexing
 - [x] **Ecosystem integration guide (`ECOSYSTEM.md`)** — four deployment patterns + cross-service EvoMetaClaw flywheel
 - [x] **Failover + evo-router** — `FAILOVER_MODELS` chain retries pre-stream provider errors transparently; `api/evo_router.py` records per-ref fitness (recency-weighted success + latency penalty) with a circuit-breaker cooldown; `EVO_ROUTING=1` orders candidates by observed fitness
+- [x] **EvoMetaClaw commercial signals (v2.5.0)** — trajectory rows now carry `agent_fingerprint` and `channel` fields (derived from the `user-agent` / `x-fcc-channel` headers at record-time) so EvoForge and GTM analytics learn which agent/surface converts, not just which provider is cheap. Opt-in: a new request header unlocks finer-grained tagging.
+- [x] **SkillOps analytics (v2.5.0)** — `api/skillops_analytics.py` computes per-skill estimated savings vs. the uniform-pick baseline. `GET /admin/api/skillops/analytics` (loopback-only) exposes `{per_skill: {baseline_cost_usd, policy_cost_usd, savings_pct, samples}, total_savings_usd}`.
 
 ### Planned 🔲
 - [ ] **In-stream fallback** — current fallback traversal catches only `preflight_stream` failures; mid-stream disconnect still bubbles up. Needs a resumable SSE wrapper that buffers the first N bytes before committing to a candidate.
@@ -304,6 +357,14 @@ All enforced in `.github/workflows/tests.yml` on push/PR to `main`/`master`:
 ---
 
 ## Changelog
+
+### v2.5.0 — 2026-11-08 (blueprint consolidation + agent-SEO for GTM + commercial signals)
+- **Blueprint consolidated**: the top-of-file (Executive Summary, Architecture diagram, Module Map) now describes the v2.5.0 state — three-pillar moat, auto-forge flywheel, agent-discovery surface — not the v2.0 state hidden behind the per-version changelog.
+- **Commercial agent-SEO (`api/discovery_routes.py`)**: adds `GET /sitemap.xml`, `GET /.well-known/agents-registry.json` (capability × pricing matrix) and `GET /.well-known/commerce.json` (offers + GTM intents). `llms.txt` and `llms-full.txt` gain a JSON-LD Service schema block and "Commercial intents" / "Buy & integrate" sections so an LLM inside Claude, ChatGPT, Perplexity or Gemini can reason about *what to sell / buy / adopt*, not only *what to call*. The admin UI stays loopback-only; every new endpoint is public, auth-free, and non-sensitive.
+- **EvoMetaClaw commercial signals (`api/trajectory.py`)**: `record(...)` accepts optional `agent_fingerprint` and `channel`. `fingerprint_from_user_agent(user_agent)` is a cheap, deterministic classifier (`claude-code`, `claude-ai`, `chatgpt`, `perplexity`, `vscode`, `jetbrains`, `discord`, `telegram`, `python-sdk`, `curl`, `other`). `_metered_stream` and `create_message` pass them through so the trajectory corpus carries both routing *and* GTM attribution, and EvoForge can be re-aggregated per channel later without a schema change.
+- **SkillOps analytics (`api/skillops_analytics.py` + `GET /admin/api/skillops/analytics`)**: compares the current SkillOpt policy's per-skill primary cost against the uniform-pick baseline (average cost across observed candidates for the same skill); loopback-only; returns per-skill and total USD savings estimates.
+- **Tests**: new coverage — `test_discovery_routes.py` (sitemap, agents-registry, commerce, JSON-LD block in llms-full), `test_trajectory.py` (agent fingerprint classifier + record-side enrichment), `test_skillops_analytics.py` (baseline, policy win, empty corpus, loopback guard).
+- **Blueprint**: v2.5.0; new completed items; roadmap kept unchanged.
 
 ### v2.4.0 — 2026-10-29 (auto-forge)
 - **Periodic auto-forge (`api/auto_forge.py`)**: asyncio background task calls `evoforge.run()` under `asyncio.to_thread` every `AUTO_FORGE_INTERVAL_HOURS` (default 24, floored at 60s). Opt-in via `AUTO_FORGE_ENABLED=1`. Only one forge in-flight at a time (lock-guarded). An `OSError` on write (serverless read-only FS) disables the loop for the process — same discipline as `health_history` / `trajectory`. Wired into `AppRuntime.startup` / `.shutdown`; `best_effort` wraps shutdown so it never blocks lifespan teardown.

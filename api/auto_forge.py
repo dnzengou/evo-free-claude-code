@@ -1,4 +1,4 @@
-"""Periodic auto-forge — closes the EvoMetaClaw × EvoForge × SkillOpt loop.
+"""Periodic auto-forge — closes the EvoMetaClaw -> EvoForge -> SkillOpt loop.
 
 Spins an asyncio background task that calls :func:`api.evoforge.run` on a
 configured interval. The newly-published policy JSON is picked up by
@@ -34,7 +34,6 @@ from typing import Any
 from loguru import logger
 
 from . import evoforge
-
 
 _DEFAULT_INTERVAL_HOURS = 24.0
 _MIN_INTERVAL_SECONDS = 60.0  # safety floor — never spin faster than this
@@ -88,9 +87,7 @@ async def _run_once() -> None:
         _state.last_run_ts = time.time()
         _state.last_run_status = "disabled"
         _state.last_run_error_type = type(exc).__name__
-        _state.last_run_duration_ms = round(
-            (time.perf_counter() - start) * 1000, 1
-        )
+        _state.last_run_duration_ms = round((time.perf_counter() - start) * 1000, 1)
         _state.disabled_reason = f"{type(exc).__name__} on write"
         logger.warning(
             "Auto-forge disabled for this process: {} ({})",
@@ -104,9 +101,7 @@ async def _run_once() -> None:
         _state.last_run_ts = time.time()
         _state.last_run_status = "error"
         _state.last_run_error_type = type(exc).__name__
-        _state.last_run_duration_ms = round(
-            (time.perf_counter() - start) * 1000, 1
-        )
+        _state.last_run_duration_ms = round((time.perf_counter() - start) * 1000, 1)
         logger.warning(
             "Auto-forge run failed: exc_type={} ({}ms)",
             type(exc).__name__,
@@ -163,12 +158,10 @@ async def stop() -> None:
     _task.cancel()
     try:
         await asyncio.wait_for(_task, timeout=2.0)
-    except (asyncio.CancelledError, TimeoutError):
+    except asyncio.CancelledError, TimeoutError:
         pass
     except Exception as exc:
-        logger.warning(
-            "Auto-forge shutdown: exc_type={}", type(exc).__name__
-        )
+        logger.warning("Auto-forge shutdown: exc_type={}", type(exc).__name__)
     finally:
         _task = None
 
@@ -176,7 +169,7 @@ async def stop() -> None:
 async def run_now() -> dict[str, Any]:
     """Force a single forge pass regardless of schedule — admin UI hook."""
     async with _lock:
-        try:
+        try:  # noqa: SIM105 — contextlib.suppress can't share `async with`
             await _run_once()
         except OSError:
             pass

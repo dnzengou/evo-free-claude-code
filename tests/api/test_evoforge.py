@@ -62,18 +62,15 @@ def test_under_sampled_candidates_are_dropped(tmp_path) -> None:
     rows = evoforge.load_rows((p,))
     stats = evoforge.aggregate(rows, evoforge.ForgeParams(min_samples=5))
     # only deepseek survives (2 openai rows < min_samples=5)
-    assert {(s.provider_id, s.model) for s in stats} == {
-        ("deepseek", "deepseek-chat")
-    }
+    assert {(s.provider_id, s.model) for s in stats} == {("deepseek", "deepseek-chat")}
 
 
 def test_cheaper_and_faster_wins(tmp_path) -> None:
     # openai/gpt-4o : $0.001, 500ms, ok=1.0 (expensive)
     # deepseek/deepseek-chat: $0.0001, 300ms, ok=1.0 (cheap+fast)
-    rows = (
-        [_row("openai", "gpt-4o", "edit", 500, 0.001)] * 10
-        + [_row("deepseek", "deepseek-chat", "edit", 300, 0.0001)] * 10
-    )
+    rows = [_row("openai", "gpt-4o", "edit", 500, 0.001)] * 10 + [
+        _row("deepseek", "deepseek-chat", "edit", 300, 0.0001)
+    ] * 10
     stats = evoforge.aggregate(rows, evoforge.ForgeParams(min_samples=5))
     policy = evoforge.build_policy(stats, evoforge.ForgeParams())
 

@@ -22,6 +22,7 @@ from . import auto_forge as _auto_forge
 from . import health_history as _health_history
 from . import metrics as _metrics
 from . import pricing as _pricing
+from . import skillops_analytics as _skillops_analytics
 from . import skillopt as _skillopt
 from . import trajectory as _trajectory
 from .admin_config import (
@@ -199,6 +200,19 @@ async def get_skillopt_policy(request: Request):
     """Return the currently loaded SkillOpt policy snapshot."""
     require_loopback_admin(request)
     return _skillopt.snapshot()
+
+
+@router.get("/admin/api/skillops/analytics")
+async def get_skillops_analytics(request: Request):
+    """Estimated per-skill savings of the active SkillOpt policy.
+
+    Compares the live policy's primary provider/model per skill against
+    the uniform-pick baseline cost of the observed corpus. Zero when no
+    policy is loaded, no corpus is present, or every entry's pricing is
+    unknown.
+    """
+    require_loopback_admin(request)
+    return _skillops_analytics.compute()
 
 
 @router.get("/admin/api/auto-forge")

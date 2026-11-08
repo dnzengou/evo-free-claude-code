@@ -8,7 +8,7 @@ from core.anthropic import get_token_count
 from core.trace import trace_event
 from providers.registry import ProviderRegistry
 
-from . import dependencies
+from . import dependencies, trajectory
 from .dependencies import get_settings, require_api_key
 from .gateway_model_ids import gateway_model_id, no_thinking_gateway_model_id
 from .models.anthropic import MessagesRequest, TokenCountRequest
@@ -165,11 +165,20 @@ def _build_models_list_response(
 # =============================================================================
 @router.post("/v1/messages")
 async def create_message(
+    request: Request,
     request_data: MessagesRequest,
     service: ClaudeProxyService = Depends(get_proxy_service),
     _auth=Depends(require_api_key),
 ):
     """Create a message (always streaming)."""
+    # EvoMetaClaw commercial attribution — tag this request's trajectory
+    # row (if logging is enabled) with the calling agent and GTM channel.
+    # No-op when trajectory logging is off, cost is one dict lookup.
+    user_agent = request.headers.get("user-agent")
+    trajectory.set_request_context(
+        agent_fingerprint=trajectory.fingerprint_from_user_agent(user_agent),
+        channel=request.headers.get("x-fcc-channel"),
+    )
     return service.create_message(request_data)
 
 

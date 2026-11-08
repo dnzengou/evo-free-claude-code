@@ -152,9 +152,7 @@ class ModelRouter:
         provider_id = Settings.parse_provider_type(provider_model_ref)
         provider_model = Settings.parse_model_name(provider_model_ref)
         if provider_id not in SUPPORTED_PROVIDER_IDS:
-            raise ValueError(
-                f"rebind: provider '{provider_id}' not registered"
-            )
+            raise ValueError(f"rebind: provider '{provider_id}' not registered")
         thinking_enabled = self._settings.resolve_thinking(original_model)
         resolved = ResolvedModel(
             original_model=original_model,
