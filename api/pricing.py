@@ -69,10 +69,38 @@ def estimate_cost_usd(
 
 
 def _lookup_price(provider_id: str, model: str) -> Price | None:
+    """Look up a price by prefixed slug, then by bare model id.
+
+    The fallback matters when a proxy wraps the real upstream — e.g.
+    ``someproxy/gpt-4o`` or ``openrouter/openai/gpt-4o``. The last
+    path segment is the actual model, so when the full slug misses we
+    also try the trailing segment of ``model`` against the bare table.
+    """
     prefixed = f"{provider_id}/{model}"
     if prefixed in _MODEL_PRICES:
         return _MODEL_PRICES[prefixed]
-    return _MODEL_PRICES.get(model)
+    if model in _BARE_MODEL_PRICES:
+        return _BARE_MODEL_PRICES[model]
+    # proxies often embed the full upstream slug in the model name
+    # (e.g. open_router/openai/gpt-4o). Try the last segment of the
+    # model name against bare, and the full suffix against prefixed.
+    if "/" in model:
+        tail = model.rsplit("/", 1)[-1]
+        if tail in _BARE_MODEL_PRICES:
+            return _BARE_MODEL_PRICES[tail]
+    return None
+
+
+# Bare-model prices derived from the prefixed catalog: the last segment
+# of each prefixed entry is a bare alias so proxies that forward the
+# upstream model id (e.g. open_router/openai/gpt-4o) still get priced.
+# A duplicated bare id keeps the last definition wins behaviour so a
+# cheaper/more conservative entry overrides earlier ones.
+_BARE_MODEL_PRICES: dict[str, Price] = {}
+for _slug, _price in _MODEL_PRICES.items():
+    _bare = _slug.rsplit("/", 1)[-1]
+    _BARE_MODEL_PRICES[_bare] = _price
+del _slug, _price, _bare
 
 
 def known_model_count() -> int:

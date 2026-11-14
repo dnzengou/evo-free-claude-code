@@ -182,7 +182,7 @@ async def create_message(
     return service.create_message(request_data)
 
 
-@router.api_route("/v1/messages", methods=["HEAD", "OPTIONS"])
+@router.api_route("/v1/messages", methods=["HEAD", "OPTIONS"], include_in_schema=False)
 async def probe_messages(_auth=Depends(require_api_key)):
     """Respond to Claude compatibility probes for the messages endpoint."""
     return _probe_response("POST, HEAD, OPTIONS")
@@ -198,7 +198,11 @@ async def count_tokens(
     return service.count_tokens(request_data)
 
 
-@router.api_route("/v1/messages/count_tokens", methods=["HEAD", "OPTIONS"])
+@router.api_route(
+    "/v1/messages/count_tokens",
+    methods=["HEAD", "OPTIONS"],
+    include_in_schema=False,
+)
 async def probe_count_tokens(_auth=Depends(require_api_key)):
     """Respond to Claude compatibility probes for the token count endpoint."""
     return _probe_response("POST, HEAD, OPTIONS")
@@ -216,7 +220,7 @@ async def root(
     }
 
 
-@router.api_route("/", methods=["HEAD", "OPTIONS"])
+@router.api_route("/", methods=["HEAD", "OPTIONS"], include_in_schema=False)
 async def probe_root():
     """Respond to unauthenticated local compatibility probes for the root endpoint."""
     return _probe_response("GET, HEAD, OPTIONS")
@@ -228,7 +232,7 @@ async def health():
     return {"status": "healthy"}
 
 
-@router.api_route("/health", methods=["HEAD", "OPTIONS"])
+@router.api_route("/health", methods=["HEAD", "OPTIONS"], include_in_schema=False)
 async def probe_health():
     """Respond to compatibility probes for the health endpoint."""
     return _probe_response("GET, HEAD, OPTIONS")

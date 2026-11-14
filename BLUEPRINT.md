@@ -1,5 +1,5 @@
 # Free Claude Code — Project Blueprint
-**Version:** 2.5.0 · **Updated:** 2026-11-08 · **Python:** 3.14.0
+**Version:** 2.5.0 · **Updated:** 2026-11-14 · **Python:** 3.14.0
 **Live:** https://free-claude-code-main-ebon.vercel.app · **Repo:** https://github.com/dnzengou/free-claude-code
 
 ---
@@ -87,7 +87,8 @@ Every enhancement is **always opt-in**: if an operator flips no flags, FCC behav
 | `api/app.py` | FastAPI factory; exception handlers; discovery + admin router mounts |
 | `api/routes.py` | Public `/v1/*` routes (messages, count_tokens, models, health) |
 | `api/admin_routes.py` | Loopback-only `/admin/*` routes (config, metrics, trajectory, skillopt, auto-forge, skillops analytics) |
-| `api/discovery_routes.py` | **Agent-SEO** — `llms.txt`, `llms-full.txt`, `/.well-known/{ai-plugin,agents,mcp,agents-registry,commerce}.json`, `sitemap.xml`, `robots.txt`, JSON-LD Service schema |
+| `api/discovery_routes.py` | FCC's concrete `AgentSEOConfig`; hands it to the reusable `agentseo` package. 647→169 LOC after the v2.5.1 extraction. |
+| `agentseo/` | **Standalone AI-agent-SEO toolkit** (reusable). `AgentSEOConfig` dataclass + 9 pure manifest renderers + FastAPI router factory + `python -m agentseo.cli` for static-site rendering. Zero deps for the CLI. |
 | `api/services.py` | `ClaudeProxyService.create_message`, `_metered_stream`, `_preflight_with_fallbacks`, failover + evo-router integration |
 | `api/model_router.py` | `ModelRouter.resolve(..., skill=…)` — direct slug > SkillOpt > MODEL_* tier > MODEL; `rebind_messages_request` for fallback candidates |
 | `api/trajectory.py` | **EvoMetaClaw** — opt-in JSONL trajectory writer with byte-cap rotation, in-memory rollup, `infer_skill` heuristic, `agent_fingerprint` + `channel` enrichment |
@@ -357,6 +358,17 @@ All enforced in `.github/workflows/tests.yml` on push/PR to `main`/`master`:
 ---
 
 ## Changelog
+
+### v2.5.1 — 2026-11-14 (standalone agentseo + production fixes)
+- **`agentseo/` standalone package**: the agent-SEO surface is now a reusable, framework-agnostic Python package (`AgentSEOConfig` dataclass + 9 pure manifest renderers + FastAPI router factory + CLI static-site renderer). Zero runtime deps for the CLI; FastAPI is optional. `api/discovery_routes.py` shrinks from 647 to 169 lines and becomes a thin FCC config. Any other FastAPI service in the ecosystem can now bolt on the complete surface with `app.include_router(build_router(my_config))`. See [`agentseo/README.md`](agentseo/README.md).
+- **`python -m agentseo.cli`**: render every manifest to a folder for static-site build steps (Jekyll, Hugo, Next.js, a CDN). Reads a plain JSON config (`agentseo/example.json`).
+- **`infer_skill` fix**: intent now beats length. A short request carrying an explicit `edit` / `plan` / `question` keyword classifies to that skill instead of silently falling through to `probe`. Restores correct SkillOpt routing for short-but-intent-clear prompts (e.g. "fix this bug"). Fixes three skillopt-fallback tests.
+- **`pricing._lookup_price` fix**: bare-model fallback now works for proxies that wrap the real upstream slug (`someproxy/gpt-4o` → matches `gpt-4o` pricing). Derived `_BARE_MODEL_PRICES` from the prefixed catalog so there's no drift. Fixes `test_bare_model_lookup_fallback`.
+- **`get_settings.cache_clear()`** in `test_discovery_endpoints_are_unauthenticated`: the `@lru_cache` wrapper meant monkeypatched env wasn't picked up — now cleared in the test's setup + teardown. Deflakes the suite under xdist.
+- **OpenAPI hygiene**: `include_in_schema=False` on every `HEAD`/`OPTIONS` probe route kills the "Duplicate Operation ID" warnings. Probes are internal — agents don't need them in the schema.
+- **pyproject**: version `2.0.0` → `2.5.0`; description rewritten (was "Middleware between Claude Code CLI and NVIDIA NIM"); `agentseo` added to hatch packages and ruff first-party.
+- **[ONBOARDING.md](ONBOARDING.md)**: 2-minute quick start, production checklist, admin-UI SSH-tunnel recipe, moat-enablement env-var table, troubleshooting matrix.
+- **Tests**: 1555/1555 passing — up from 1546/1551 with 5 pre-existing failures. 9 new tests in `tests/agentseo/` cover every manifest shape, the FastAPI router, the CLI renderer.
 
 ### v2.5.0 — 2026-11-08 (blueprint consolidation + agent-SEO for GTM + commercial signals)
 - **Blueprint consolidated**: the top-of-file (Executive Summary, Architecture diagram, Module Map) now describes the v2.5.0 state — three-pillar moat, auto-forge flywheel, agent-discovery surface — not the v2.0 state hidden behind the per-version changelog.

@@ -102,25 +102,30 @@ def infer_skill(
     ``input_tokens`` is optional — when unknown (pre-routing), the "probe"
     short-circuit uses the raw text length instead. The remaining branches
     only look at messages + tools.
+
+    Intent beats length: a short request that carries an explicit
+    ``edit`` / ``plan`` / ``question`` keyword classifies to that skill
+    rather than ``probe``. Otherwise a short, intent-free message is
+    still a probe (health check, ping, keep-alive).
     """
     approx_tokens = (
         input_tokens if input_tokens is not None else _approx_tokens(messages)
     )
-    if approx_tokens <= 128 and not tools:
-        return "probe"
+    text = _first_user_text(messages).lower()
     if tools:
         tool_names = _tool_names(tools)
         if any(name in _EDIT_TOOL_NAMES for name in tool_names):
             return "edit"
         if any(name in _PLAN_TOOL_NAMES for name in tool_names):
             return "plan"
-    text = _first_user_text(messages).lower()
     if any(w in text for w in _EDIT_KEYWORDS):
         return "edit"
     if any(w in text for w in _PLAN_KEYWORDS):
         return "plan"
     if text.endswith("?") or text.startswith(("why ", "how ", "what ", "when ")):
         return "question"
+    if approx_tokens <= 128 and not tools:
+        return "probe"
     return "chat"
 
 

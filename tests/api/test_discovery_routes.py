@@ -88,20 +88,28 @@ def test_openapi_has_agent_friendly_title():
     assert r.status_code == 200
     spec = json.loads(r.text)
     assert "Free Claude Code" in spec["info"]["title"]
-    assert spec["info"]["version"] == "2.5.0"
+    assert spec["info"]["version"] == "2.5.1"
 
 
 # ── public — no auth needed, no proxy env to set ─────────────────────
 
 
 def test_discovery_endpoints_are_unauthenticated(monkeypatch):
+    # ``get_settings`` caches with ``@lru_cache`` — invalidate it so the
+    # monkeypatched auth token actually takes effect in this worker.
+    from config.settings import get_settings
+
     monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "shh")
-    client = TestClient(create_app(lifespan_enabled=False))
-    # auth-required routes return 401 without a token
-    assert client.get("/v1/models").status_code in (401, 403)
-    # discovery routes still return 200
-    assert client.get("/llms.txt").status_code == 200
-    assert client.get("/.well-known/agents.json").status_code == 200
+    get_settings.cache_clear()
+    try:
+        client = TestClient(create_app(lifespan_enabled=False))
+        # auth-required routes return 401 without a token
+        assert client.get("/v1/models").status_code in (401, 403)
+        # discovery routes still return 200
+        assert client.get("/llms.txt").status_code == 200
+        assert client.get("/.well-known/agents.json").status_code == 200
+    finally:
+        get_settings.cache_clear()
 
 
 # ── v2.5.0 agent-SEO additions ──────────────────────────────────────
@@ -136,7 +144,7 @@ def test_agents_registry_manifest_shape():
     assert r.status_code == 200
     body = r.json()
     assert body["name"] == "Free Claude Code — Anthropic-compatible model gateway"
-    assert body["version"] == "2.5.0"
+    assert body["version"] == "2.5.1"
     assert body["license"] == "MIT"
     cap_ids = {cap["id"] for cap in body["capabilities"]}
     assert {
@@ -198,4 +206,4 @@ def test_agents_manifest_lists_commerce_and_version():
     assert body["commerce"].endswith("/.well-known/commerce.json")
     assert body["registry"].endswith("/.well-known/agents-registry.json")
     assert body["sitemap"].endswith("/sitemap.xml")
-    assert body["version"] == "2.5.0"
+    assert body["version"] == "2.5.1"

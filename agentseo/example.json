@@ -1,0 +1,51 @@
+{
+  "service_name": "Example Service",
+  "service_description": "A short sentence an LLM will quote back when asked what your service does.",
+  "repo_url": "https://github.com/your-org/your-service",
+  "live_url": "https://your-service.example.com",
+  "version": "1.0.0",
+  "license": "MIT",
+  "plugin_name_for_model": "example_service",
+  "contact_email": "hello@example.com",
+  "capabilities": [
+    {
+      "id": "example.do",
+      "method": "POST",
+      "path": "/v1/do",
+      "description": "Do the thing. Returns a result.",
+      "auth": "bearer",
+      "pricing_model": "pass-through-provider"
+    }
+  ],
+  "offers": [
+    {
+      "id": "self-host",
+      "name": "Self-host (open source)",
+      "price": 0.0,
+      "currency": "USD",
+      "intent": "adoption",
+      "cta_url": "https://github.com/your-org/your-service",
+      "summary": "Clone and run locally or on your cloud. MIT licensed."
+    },
+    {
+      "id": "hosted",
+      "name": "Hosted plan",
+      "price": null,
+      "currency": "USD",
+      "intent": "sales-qualified",
+      "cta_url": "https://your-service.example.com/pricing",
+      "summary": "Managed instance with support and SLA."
+    },
+    {
+      "id": "support",
+      "name": "Priority support",
+      "price": null,
+      "currency": "USD",
+      "intent": "support-qualified",
+      "cta_url": "https://github.com/your-org/your-service/issues",
+      "summary": "Response-time SLA for production users."
+    }
+  ],
+  "ecosystem_clients": ["web", "cli", "python-sdk"],
+  "gtm_notes": "Open source is free. Hosted and support are opened via GitHub issues tagged `sales` or `support`."
+}

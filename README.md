@@ -14,6 +14,11 @@ Use Claude Code CLI, VS Code, JetBrains ACP, or chat bots through your own Anthr
 
 Free Claude Code routes Anthropic Messages API traffic from Claude Code to any provider. It keeps Claude Code's client-side protocol stable while letting you choose free, paid, or local models.
 
+**New here? → [ONBOARDING.md](ONBOARDING.md) gets you running in 2 minutes.**
+**Shipping to prod? → [ONBOARDING.md#production-checklist](ONBOARDING.md#production-checklist).**
+**Want the architecture? → [BLUEPRINT.md](BLUEPRINT.md).**
+**Want agent-SEO on your own service? → [`agentseo/`](agentseo/) is the reusable package.**
+
 [Quick Start](#quick-start) · [Providers](#choose-a-provider) · [Clients](#connect-claude-code) · [Integrations](#optional-integrations) · [Development](#development)
 
 </div>
