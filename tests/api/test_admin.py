@@ -655,9 +655,7 @@ def test_admin_forge_now_is_loopback_only(monkeypatch, tmp_path):
     app = create_app(lifespan_enabled=False)
 
     remote_client = TestClient(app, client=("203.0.113.10", 50000))
-    assert (
-        remote_client.post("/admin/api/skillopt/forge").status_code == 403
-    )
+    assert remote_client.post("/admin/api/skillopt/forge").status_code == 403
 
 
 def test_admin_metrics_endpoint_is_loopback_only(monkeypatch, tmp_path):

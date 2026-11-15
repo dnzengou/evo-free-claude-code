@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -67,9 +66,7 @@ class _StubProvider(BaseProvider):
 def _enable_skillopt(monkeypatch, tmp_path, policy: dict[str, Any]) -> None:
     monkeypatch.setenv("SKILLOPT_ENABLED", "1")
     monkeypatch.setenv("FCC_CACHE_DIR", str(tmp_path))
-    (tmp_path / "skillopt_policy.json").write_text(
-        json.dumps(policy), encoding="utf-8"
-    )
+    (tmp_path / "skillopt_policy.json").write_text(json.dumps(policy), encoding="utf-8")
     skillopt.invalidate_cache()
 
 
@@ -163,9 +160,7 @@ def test_primary_service_unavailable_falls_back(settings, monkeypatch, tmp_path)
             },
         },
     )
-    primary = _StubProvider(
-        "openai", preflight_raises=ServiceUnavailableError("down")
-    )
+    primary = _StubProvider("openai", preflight_raises=ServiceUnavailableError("down"))
     fallback = _StubProvider("deepseek")
     service = _make_service(settings, {"openai": primary, "deepseek": fallback})
 
@@ -174,9 +169,7 @@ def test_primary_service_unavailable_falls_back(settings, monkeypatch, tmp_path)
     assert fallback.preflight_called is True
 
 
-def test_all_candidates_fail_re_raises_primary_error(
-    settings, monkeypatch, tmp_path
-):
+def test_all_candidates_fail_re_raises_primary_error(settings, monkeypatch, tmp_path):
     _enable_skillopt(
         monkeypatch,
         tmp_path,
@@ -218,9 +211,7 @@ def test_fallback_pointing_at_unsupported_provider_is_skipped(
             },
         },
     )
-    primary = _StubProvider(
-        "openai", preflight_raises=AuthenticationError("down")
-    )
+    primary = _StubProvider("openai", preflight_raises=AuthenticationError("down"))
     fallback = _StubProvider("deepseek")
     service = _make_service(settings, {"openai": primary, "deepseek": fallback})
 
@@ -235,9 +226,7 @@ def test_skillopt_disabled_disables_fallback(settings, monkeypatch, tmp_path):
     monkeypatch.setenv("FCC_CACHE_DIR", str(tmp_path))
     skillopt.invalidate_cache()
 
-    primary = _StubProvider(
-        "openai", preflight_raises=AuthenticationError("boom")
-    )
+    primary = _StubProvider("openai", preflight_raises=AuthenticationError("boom"))
     service = _make_service(settings, {"openai": primary})
 
     with pytest.raises(AuthenticationError, match="boom"):

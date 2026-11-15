@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "free-claude-code"
-version = "2.0.0"
-description = "Middleware between Claude Code CLI (Anthropic API) and NVIDIA NIM"
+version = "2.5.1"
+description = "Anthropic Messages API proxy with EvoMetaClaw / EvoForge / SkillOpt, 18 provider backends, and an agent-SEO discovery surface."
 readme = "README.md"
 requires-python = ">=3.14.0"
 dependencies = [
@@ -44,7 +44,7 @@ voice_local = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["api", "cli", "config", "core", "messaging", "providers"]
+packages = ["agentseo", "api", "cli", "config", "core", "messaging", "providers"]
 
 [tool.hatch.build.targets.wheel.force-include]
 ".env.example" = "cli/env.example"
@@ -91,7 +91,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["api", "cli", "config", "core", "messaging", "providers", "smoke"]
+known-first-party = ["agentseo", "api", "cli", "config", "core", "messaging", "providers", "smoke"]
 
 [tool.ruff.format]
 quote-style = "double"

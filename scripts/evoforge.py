@@ -34,9 +34,7 @@ def _cli() -> int:
     parser.add_argument(
         "--output", type=Path, help="Where to write the SkillOpt policy JSON"
     )
-    parser.add_argument(
-        "--min-samples", type=int, default=evoforge.DEFAULT_MIN_SAMPLES
-    )
+    parser.add_argument("--min-samples", type=int, default=evoforge.DEFAULT_MIN_SAMPLES)
     parser.add_argument("--top-k", type=int, default=evoforge.DEFAULT_TOP_K)
     parser.add_argument(
         "--dry-run", action="store_true", help="Print policy, do not write"

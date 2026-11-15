@@ -33,8 +33,7 @@ from providers.exceptions import (
     ServiceUnavailableError,
 )
 
-from . import metrics, pricing, skillopt, trajectory
-from . import evo_router, metrics
+from . import evo_router, metrics, pricing, skillopt, trajectory
 from .model_router import ModelRouter, RoutedMessagesRequest
 from .models.anthropic import MessagesRequest, TokenCountRequest
 from .models.responses import TokenCountResponse
@@ -86,6 +85,8 @@ async def _metered_stream(
     skill: str = "chat",
     thinking_enabled: bool = False,
     model_ref: str,
+    agent_fingerprint: str | None = None,
+    channel: str | None = None,
 ) -> AsyncIterator[str]:
     """Wrap a provider SSE stream to record metrics + evo-router fitness."""
     start = time.perf_counter()
@@ -145,6 +146,9 @@ async def _metered_stream(
                     provider_id, model, input_tokens, output_tokens
                 ),
                 status=status,
+                agent_fingerprint=agent_fingerprint
+                or trajectory.current_agent_fingerprint(),
+                channel=channel or trajectory.current_channel(),
             )
         if record_fitness:
             evo_router.record_outcome(
@@ -449,9 +453,7 @@ class ClaudeProxyService:
         try:
             _require_non_empty_messages(request_data.messages)
 
-            skill = trajectory.infer_skill(
-                request_data.messages, request_data.tools
-            )
+            skill = trajectory.infer_skill(request_data.messages, request_data.tools)
             routed = self._model_router.resolve_messages_request(
                 request_data, skill=skill
             )

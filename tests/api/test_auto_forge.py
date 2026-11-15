@@ -7,7 +7,6 @@ import pytest
 
 from api import auto_forge
 
-
 # ── Static accessors ─────────────────────────────────────────────────
 
 
