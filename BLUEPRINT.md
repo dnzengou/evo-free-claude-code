@@ -1,5 +1,5 @@
 # Free Claude Code — Project Blueprint
-**Version:** 2.5.0 · **Updated:** 2026-11-14 · **Python:** 3.14.0
+**Version:** 2.5.2 · **Updated:** 2026-11-20 · **Python:** 3.14.0
 **Live:** https://free-claude-code-main-ebon.vercel.app · **Repo:** https://github.com/dnzengou/free-claude-code
 
 ---
@@ -358,6 +358,14 @@ All enforced in `.github/workflows/tests.yml` on push/PR to `main`/`master`:
 ---
 
 ## Changelog
+
+### v2.5.2 — 2026-11-20 (editions model + onboarding companion + FAQ)
+- **[LICENSING.md](LICENSING.md)**: comprehensive strategy guide covering five open-core / BSL / FSL / AGPL-dual / fair-code models with best-in-class references (GitLab, HashiCorp, Elastic, Sentry, n8n, Grafana, Supabase, PostHog, Cal.com, MongoDB). Ends with a concrete FCC recommendation: MIT Community + FSL-1.1 Pro + Commercial Cloud. Includes an 8-question FAQ, a pricing anchor table, and a "what not to do" section.
+- **`Plan` + `Feature` dataclasses in `agentseo`**: new types + `render_plans_json` renderer + `/.well-known/plans.json` route. The feature × edition matrix is agent-readable so LLMs helping a user pick a tier can quote the actual plan contents instead of hallucinating.
+- **FCC concrete plans**: `api/discovery_routes.py` ships a 3-plan catalogue (Community / Pro / Cloud) and 13 features. The aggregated-corpus SkillOpt policies are declared Cloud-only — the real moat.
+- **Admin UI "Edition" tab**: new nav entry rendering a plan-card grid + 6-question FAQ. Reads `/.well-known/plans.json` so there's a single source of truth. CSS additions use existing design tokens (card / line / accent / muted) to stay theme-compatible.
+- **Tests**: 4 new — `test_plans_manifest_shape`, `test_plans_manifest_empty_when_not_configured`, `test_plans_manifest_lists_community_pro_cloud`, `test_sitemap_lists_plans_endpoint`. 1559/1559 passing.
+- **Version bumps**: OpenAPI, discovery service, pyproject all to 2.5.2.
 
 ### v2.5.1 — 2026-11-14 (standalone agentseo + production fixes)
 - **`agentseo/` standalone package**: the agent-SEO surface is now a reusable, framework-agnostic Python package (`AgentSEOConfig` dataclass + 9 pure manifest renderers + FastAPI router factory + CLI static-site renderer). Zero runtime deps for the CLI; FastAPI is optional. `api/discovery_routes.py` shrinks from 647 to 169 lines and becomes a thin FCC config. Any other FastAPI service in the ecosystem can now bolt on the complete surface with `app.include_router(build_router(my_config))`. See [`agentseo/README.md`](agentseo/README.md).

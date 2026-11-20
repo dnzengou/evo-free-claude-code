@@ -17,8 +17,27 @@ import json
 import sys
 from pathlib import Path
 
-from .config import AgentSEOConfig, coerce_capability, coerce_offer
+from .config import (
+    AgentSEOConfig,
+    Feature,
+    Plan,
+    coerce_capability,
+    coerce_offer,
+)
 from .manifests import render_manifests
+
+
+def _coerce_feature(f: Feature | dict) -> Feature:
+    if isinstance(f, Feature):
+        return f
+    data = dict(f)
+    if "plans" in data and isinstance(data["plans"], list):
+        data["plans"] = tuple(data["plans"])
+    return Feature(**data)
+
+
+def _coerce_plan(p: Plan | dict) -> Plan:
+    return p if isinstance(p, Plan) else Plan(**p)
 
 
 def _load_config(path: Path) -> AgentSEOConfig:
@@ -27,6 +46,8 @@ def _load_config(path: Path) -> AgentSEOConfig:
         coerce_capability(c) for c in raw.get("capabilities", [])
     )
     raw["offers"] = tuple(coerce_offer(o) for o in raw.get("offers", []))
+    raw["plans"] = tuple(_coerce_plan(p) for p in raw.get("plans", []))
+    raw["features"] = tuple(_coerce_feature(f) for f in raw.get("features", []))
     for k in (
         "disallow_paths",
         "ai_crawler_user_agents",

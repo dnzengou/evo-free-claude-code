@@ -37,6 +37,11 @@ const VIEW_GROUPS = [
     label: "Metrics",
     title: "Request Metrics",
   },
+  {
+    id: "edition",
+    label: "Edition",
+    title: "Your Edition & Upgrade Options",
+  },
 ];
 
 // ── App State ─────────────────────────────────────────────────
@@ -194,6 +199,7 @@ function setActiveView(viewId, { scroll = false } = {}) {
   });
 
   if (activeView.id === "metrics") loadMetrics();
+  if (activeView.id === "edition") loadEdition();
   if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -1093,6 +1099,106 @@ function renderMetrics(container, data, trajData) {
         <tbody>${rows}</tbody>
       </table>
     </div>`;
+}
+
+// ================================================================
+//  EDITION — onboarding companion
+// ================================================================
+async function loadEdition() {
+  const target = byId("editionContent");
+  if (!target) return;
+  target.innerHTML = '<div class="skeleton skeleton-card"></div>';
+  try {
+    const res = await fetch("/.well-known/plans.json", { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    target.innerHTML = renderEdition(data);
+  } catch (err) {
+    target.innerHTML = `<div class="warning">Failed to load plans: ${err.message}</div>`;
+  }
+}
+
+function renderEdition(data) {
+  const activePlanId = "community"; // runtime edition; wired for now
+  const plans = (data.plans || [])
+    .slice()
+    .sort((a, b) => (a.order || 0) - (b.order || 0));
+  const features = data.features || [];
+
+  // Group features by plan membership — simplest display: for each plan,
+  // list the feature names that include it.
+  const planFeatures = Object.fromEntries(
+    plans.map((p) => [
+      p.id,
+      features.filter((f) => (f.plans || []).includes(p.id)),
+    ])
+  );
+
+  const planCards = plans
+    .map((p) => {
+      const isActive = p.id === activePlanId;
+      const feats = planFeatures[p.id] || [];
+      const priceLabel =
+        p.price === 0
+          ? "Free"
+          : p.price == null
+            ? "Contact"
+            : `$${p.price} ${p.currency}${p.unit ? " / " + p.unit : ""}`;
+      return `
+      <article class="edition-card${isActive ? " edition-card-active" : ""}">
+        <header class="edition-card-head">
+          <h3>${escapeHtml(p.name)}</h3>
+          ${isActive ? '<span class="edition-badge">Active</span>' : ""}
+        </header>
+        <p class="edition-price">${escapeHtml(priceLabel)}</p>
+        <p class="edition-license">License: <code>${escapeHtml(p.license)}</code></p>
+        <p class="edition-summary">${escapeHtml(p.summary || "")}</p>
+        <ul class="edition-features">
+          ${feats.map((f) => `<li>${escapeHtml(f.name)}</li>`).join("")}
+        </ul>
+        <a class="edition-cta" href="${escapeAttr(p.cta_url)}" target="_blank" rel="noopener">
+          ${isActive ? "View on GitHub" : "Learn more →"}
+        </a>
+      </article>`;
+    })
+    .join("");
+
+  const faq = `
+    <section class="edition-faq">
+      <h3>FAQ</h3>
+      <details><summary>Will the Community edition stay free?</summary>
+        <p>Yes — everything on <code>main</code> is MIT-licensed and will stay MIT. See <a href="https://github.com/dnzengou/free-claude-code/blob/main/LICENSING.md" target="_blank" rel="noopener">LICENSING.md</a> for the long-form guarantee.</p></details>
+      <details><summary>What is FSL and why isn't Pro "open source"?</summary>
+        <p>FSL is <em>source-available</em> — you can read, modify, and self-host it; you can't sell it as a competing managed service. After 2 years every release auto-converts to Apache 2.0. See <a href="https://github.com/dnzengou/free-claude-code/blob/main/LICENSING.md#13-functional-source-license-fsl--short-aggressive-bsl" target="_blank" rel="noopener">LICENSING.md §1.3</a>.</p></details>
+      <details><summary>Does Cloud share the same code as Community?</summary>
+        <p>Cloud = OSS core + Pro plugins + proprietary ops. If you self-host today, migrating off Cloud later is a config change, not a rewrite.</p></details>
+      <details><summary>Who is Pro for?</summary>
+        <p>Teams needing SSO, audit log, or RBAC for compliance — usually ~5+ users and some external-audit requirement.</p></details>
+      <details><summary>Who is Cloud for?</summary>
+        <p>Teams who want to <em>stop operating the gateway themselves</em>, and who want the aggregated-corpus SkillOpt policies that only hosted Cloud can produce.</p></details>
+      <details><summary>How can I move between editions?</summary>
+        <p>Community → Pro: install the <code>fcc-pro</code> plugins and supply a license file. Pro → Cloud: change <code>ANTHROPIC_BASE_URL</code> on your clients. Everything else is drop-in.</p></details>
+    </section>`;
+
+  return `
+    <div class="edition-grid">${planCards}</div>
+    <p class="edition-note">
+      Published at <a href="/.well-known/plans.json" target="_blank" rel="noopener"><code>/.well-known/plans.json</code></a>
+      so AI agents helping your users pick a plan can read it directly.
+    </p>
+    ${faq}`;
+}
+
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+function escapeAttr(s) {
+  return escapeHtml(s);
 }
 
 // ================================================================

@@ -48,6 +48,7 @@ def render_llms_txt(config: AgentSEOConfig, base_url: str) -> str:
 - {base_url}/.well-known/mcp.json — MCP pointer
 - {base_url}/.well-known/agents-registry.json — capability x pricing matrix
 - {base_url}/.well-known/commerce.json — offers + GTM intents
+- {base_url}/.well-known/plans.json — feature x edition matrix
 - {base_url}/sitemap.xml — public URL index
 - {base_url}/llms-full.txt — expanded reference
 
@@ -241,6 +242,51 @@ def render_agents_registry_json(
     }
 
 
+def render_plans_json(config: AgentSEOConfig, base_url: str) -> dict[str, Any]:
+    """Return the feature x edition matrix manifest body.
+
+    Shape is designed so an agent can answer two questions in one read:
+    *which edition does my user need?* and *what does each one include?*
+    When the config has no ``plans``, the manifest is still valid: it
+    reports zero plans and zero features — agents reading it know the
+    service is free-only.
+    """
+    plans_sorted = sorted(config.plans, key=lambda p: (p.order, p.id))
+    return {
+        "name": config.service_name,
+        "version": config.version,
+        "service_url": base_url,
+        "docs": [
+            f"{base_url}/llms.txt",
+            f"{base_url}/llms-full.txt",
+        ],
+        "plans": [
+            {
+                "id": p.id,
+                "name": p.name,
+                "license": p.license,
+                "price": p.price,
+                "currency": p.currency,
+                "unit": p.unit,
+                "cta_url": p.cta_url,
+                "summary": p.summary,
+            }
+            for p in plans_sorted
+        ],
+        "features": [
+            {
+                "id": f.id,
+                "name": f.name,
+                "description": f.description,
+                "docs_url": f.docs_url,
+                "plans": list(f.plans),
+            }
+            for f in config.features
+        ],
+        "commerce": f"{base_url}/.well-known/commerce.json",
+    }
+
+
 def render_commerce_json(config: AgentSEOConfig, base_url: str) -> dict[str, Any]:
     """Return the commerce manifest body."""
     intents = sorted({o.intent for o in config.offers})
@@ -272,6 +318,7 @@ def render_sitemap_xml(config: AgentSEOConfig, base_url: str) -> str:
         f"{base_url}/.well-known/agents-registry.json",
         f"{base_url}/.well-known/mcp.json",
         f"{base_url}/.well-known/commerce.json",
+        f"{base_url}/.well-known/plans.json",
         f"{base_url}/openapi.json",
         f"{base_url}/docs",
         f"{base_url}/redoc",
@@ -335,6 +382,9 @@ def render_manifests(config: AgentSEOConfig, base_url: str) -> dict[str, str]:
         ),
         "/.well-known/commerce.json": json.dumps(
             render_commerce_json(config, base_url), indent=2
+        ),
+        "/.well-known/plans.json": json.dumps(
+            render_plans_json(config, base_url), indent=2
         ),
     }
 

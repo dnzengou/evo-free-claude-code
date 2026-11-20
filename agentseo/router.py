@@ -78,4 +78,8 @@ def build_router(config: AgentSEOConfig) -> APIRouter:
     async def commerce(request: Request) -> JSONResponse:
         return JSONResponse(manifests.render_commerce_json(config, _base_url(request)))
 
+    @router.get("/.well-known/plans.json")
+    async def plans(request: Request) -> JSONResponse:
+        return JSONResponse(manifests.render_plans_json(config, _base_url(request)))
+
     return router
