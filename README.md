@@ -18,6 +18,7 @@ Free Claude Code routes Anthropic Messages API traffic from Claude Code to any p
 **Shipping to prod? → [ONBOARDING.md#production-checklist](ONBOARDING.md#production-checklist).**
 **Want the architecture? → [BLUEPRINT.md](BLUEPRINT.md).**
 **Want agent-SEO on your own service? → [`agentseo/`](agentseo/) is the reusable package.**
+**Deciding what to open-source vs. license commercially? → [LICENSING.md](LICENSING.md).**
 
 [Quick Start](#quick-start) · [Providers](#choose-a-provider) · [Clients](#connect-claude-code) · [Integrations](#optional-integrations) · [Development](#development)
 

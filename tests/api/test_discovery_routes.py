@@ -88,7 +88,7 @@ def test_openapi_has_agent_friendly_title():
     assert r.status_code == 200
     spec = json.loads(r.text)
     assert "Free Claude Code" in spec["info"]["title"]
-    assert spec["info"]["version"] == "2.5.1"
+    assert spec["info"]["version"] == "2.5.2"
 
 
 # ── public — no auth needed, no proxy env to set ─────────────────────
@@ -144,7 +144,7 @@ def test_agents_registry_manifest_shape():
     assert r.status_code == 200
     body = r.json()
     assert body["name"] == "Free Claude Code — Anthropic-compatible model gateway"
-    assert body["version"] == "2.5.1"
+    assert body["version"] == "2.5.2"
     assert body["license"] == "MIT"
     cap_ids = {cap["id"] for cap in body["capabilities"]}
     assert {
@@ -201,9 +201,36 @@ def test_ai_plugin_manifest_links_commerce_and_registry():
     assert body["agents_registry_url"].endswith("/.well-known/agents-registry.json")
 
 
+def test_plans_manifest_lists_community_pro_cloud():
+    r = _client().get("/.well-known/plans.json")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["name"] == "Free Claude Code — Anthropic-compatible model gateway"
+    ids = [p["id"] for p in body["plans"]]
+    assert ids == ["community", "pro", "cloud"]
+    community = body["plans"][0]
+    assert community["license"] == "MIT"
+    assert community["price"] == 0.0
+    # Pro is FSL-based, contact-for-pricing
+    pro = body["plans"][1]
+    assert pro["license"].startswith("FSL")
+    assert pro["price"] is None
+    # Aggregated-corpus policies only in Cloud — the moat lives there
+    moat = next(f for f in body["features"] if f["id"] == "cloud.aggregated_policies")
+    assert moat["plans"] == ["cloud"]
+    # Core gateway available in every tier
+    proxy = next(f for f in body["features"] if f["id"] == "gateway.proxy")
+    assert set(proxy["plans"]) == {"community", "pro", "cloud"}
+
+
+def test_sitemap_lists_plans_endpoint():
+    body = _client().get("/sitemap.xml").text
+    assert "/.well-known/plans.json</loc>" in body
+
+
 def test_agents_manifest_lists_commerce_and_version():
     body = _client().get("/.well-known/agents.json").json()
     assert body["commerce"].endswith("/.well-known/commerce.json")
     assert body["registry"].endswith("/.well-known/agents-registry.json")
     assert body["sitemap"].endswith("/sitemap.xml")
-    assert body["version"] == "2.5.1"
+    assert body["version"] == "2.5.2"

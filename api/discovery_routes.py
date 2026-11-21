@@ -9,7 +9,7 @@ for how to reuse the same surface in any FastAPI service.
 
 from __future__ import annotations
 
-from agentseo import AgentSEOConfig, Capability, Offer, build_router
+from agentseo import AgentSEOConfig, Capability, Feature, Offer, Plan, build_router
 
 _SERVICE_NAME = "Free Claude Code — Anthropic-compatible model gateway"
 _SERVICE_DESCRIPTION = (
@@ -21,7 +21,7 @@ _SERVICE_DESCRIPTION = (
 )
 _REPO_URL = "https://github.com/dnzengou/free-claude-code"
 _LIVE_URL = "https://free-claude-code-main-ebon.vercel.app"
-_SERVICE_VERSION = "2.5.1"
+_SERVICE_VERSION = "2.5.2"
 
 _CAPABILITIES = (
     Capability(
@@ -122,6 +122,123 @@ _OFFERS = (
     ),
 )
 
+_PLANS = (
+    Plan(
+        id="community",
+        name="Community Edition",
+        license="MIT",
+        price=0.0,
+        currency="USD",
+        unit="project",
+        cta_url=_REPO_URL,
+        summary="Full gateway, 18 provider backends, local EvoMetaClaw / EvoForge / SkillOpt, admin UI, agentseo package. Forever free.",
+        order=0,
+    ),
+    Plan(
+        id="pro",
+        name="Pro Edition",
+        license="FSL-1.1-Apache-2.0",
+        price=None,
+        currency="USD",
+        unit="per instance / month",
+        cta_url=f"{_REPO_URL}#pro",
+        summary="Source-available add-ons: OIDC/SAML SSO, audit log, Prometheus/OTEL export, SkillOpt policy A/B diffing, team-mode admin with RBAC. Converts to Apache 2.0 after 2 years.",
+        order=1,
+    ),
+    Plan(
+        id="cloud",
+        name="Cloud (hosted)",
+        license="Commercial",
+        price=None,
+        currency="USD",
+        unit="per instance / month + usage",
+        cta_url=f"{_REPO_URL}#hosted",
+        summary="Managed FCC gateway with 99.9% SLA. SkillOpt policies tuned against an aggregated multi-tenant trajectory corpus — the real moat.",
+        order=2,
+    ),
+)
+
+_FEATURES = (
+    Feature(
+        id="gateway.proxy",
+        name="Anthropic Messages API proxy",
+        description="Drop-in Anthropic-compatible gateway, 18 provider backends.",
+        plans=("community", "pro", "cloud"),
+    ),
+    Feature(
+        id="gateway.admin_ui",
+        name="Local admin UI",
+        description="Loopback-only web UI for config, validation, metrics.",
+        plans=("community", "pro", "cloud"),
+    ),
+    Feature(
+        id="evo.metaclaw",
+        name="EvoMetaClaw trajectory logger",
+        description="Local JSONL trajectory capture with byte-cap rotation.",
+        plans=("community", "pro", "cloud"),
+    ),
+    Feature(
+        id="evo.forge",
+        name="EvoForge offline policy builder",
+        description="Local CLI + optional auto-forge loop over your own corpus.",
+        plans=("community", "pro", "cloud"),
+    ),
+    Feature(
+        id="evo.skillopt",
+        name="SkillOpt runtime routing",
+        description="Skill-conditioned routing from a local SkillOpt policy.",
+        plans=("community", "pro", "cloud"),
+    ),
+    Feature(
+        id="agentseo.surface",
+        name="Agent-SEO discovery surface",
+        description="/llms.txt, /.well-known/*, sitemap, robots — included out of the box.",
+        plans=("community", "pro", "cloud"),
+    ),
+    Feature(
+        id="enterprise.sso",
+        name="SSO (OIDC / SAML)",
+        description="Single sign-on for the admin UI with OIDC or SAML.",
+        plans=("pro", "cloud"),
+    ),
+    Feature(
+        id="enterprise.audit",
+        name="Audit log + export",
+        description="Append-only audit log of admin actions, exportable to S3/GCS.",
+        plans=("pro", "cloud"),
+    ),
+    Feature(
+        id="enterprise.otel",
+        name="Prometheus / OpenTelemetry exporter",
+        description="Metrics + traces in formats your observability stack already speaks.",
+        plans=("pro", "cloud"),
+    ),
+    Feature(
+        id="enterprise.rbac",
+        name="Team-mode admin + RBAC",
+        description="Per-user API keys, role-based access to admin actions.",
+        plans=("pro", "cloud"),
+    ),
+    Feature(
+        id="enterprise.policy_ab",
+        name="SkillOpt policy A/B gates",
+        description="Shadow a candidate policy before promoting it; compare results side by side.",
+        plans=("pro", "cloud"),
+    ),
+    Feature(
+        id="cloud.aggregated_policies",
+        name="Aggregated-corpus SkillOpt policies",
+        description="Routing policies tuned against multi-tenant real-world traffic. Only in Cloud.",
+        plans=("cloud",),
+    ),
+    Feature(
+        id="cloud.sla",
+        name="99.9% SLA + dedicated support",
+        description="Hosted ops, response-time SLA, migration help.",
+        plans=("cloud",),
+    ),
+)
+
 CONFIG = AgentSEOConfig(
     service_name=_SERVICE_NAME,
     service_description=_SERVICE_DESCRIPTION,
@@ -178,6 +295,8 @@ CONFIG = AgentSEOConfig(
         "issue tagged `sales` or `support`."
     ),
     plugin_name_for_model="free_claude_code",
+    plans=_PLANS,
+    features=_FEATURES,
 )
 
 router = build_router(CONFIG)

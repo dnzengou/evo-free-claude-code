@@ -35,7 +35,7 @@ load from any format. No framework dependency beyond the optional
 ``build_router`` helper. No single point of failure.
 """
 
-from .config import AgentSEOConfig, Capability, Offer
+from .config import AgentSEOConfig, Capability, Feature, Offer, Plan
 from .manifests import (
     render_agents_json,
     render_agents_registry_json,
@@ -45,6 +45,7 @@ from .manifests import (
     render_llms_txt,
     render_manifests,
     render_mcp_json,
+    render_plans_json,
     render_robots_txt,
     render_sitemap_xml,
 )
@@ -52,7 +53,9 @@ from .manifests import (
 __all__ = [
     "AgentSEOConfig",
     "Capability",
+    "Feature",
     "Offer",
+    "Plan",
     "build_router",
     "render_agents_json",
     "render_agents_registry_json",
@@ -62,6 +65,7 @@ __all__ = [
     "render_llms_txt",
     "render_manifests",
     "render_mcp_json",
+    "render_plans_json",
     "render_robots_txt",
     "render_sitemap_xml",
 ]

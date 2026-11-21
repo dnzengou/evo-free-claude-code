@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "free-claude-code"
-version = "2.5.1"
+version = "2.5.2"
 description = "Anthropic Messages API proxy with EvoMetaClaw / EvoForge / SkillOpt, 18 provider backends, and an agent-SEO discovery surface."
 readme = "README.md"
 requires-python = ">=3.14.0"

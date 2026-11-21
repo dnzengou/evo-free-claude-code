@@ -15,7 +15,9 @@ from fastapi.testclient import TestClient
 from agentseo import (
     AgentSEOConfig,
     Capability,
+    Feature,
     Offer,
+    Plan,
     build_router,
     render_manifests,
 )
@@ -73,8 +75,76 @@ def test_render_manifests_covers_every_endpoint() -> None:
         "/.well-known/mcp.json",
         "/.well-known/agents-registry.json",
         "/.well-known/commerce.json",
+        "/.well-known/plans.json",
     }
     assert set(out.keys()) == expected
+
+
+def test_plans_manifest_shape() -> None:
+    config = AgentSEOConfig(
+        service_name="Demo",
+        service_description="d",
+        repo_url="https://example.com/r",
+        live_url="https://example.com",
+        plans=(
+            Plan(
+                id="community",
+                name="Community",
+                license="MIT",
+                price=0.0,
+                cta_url="https://example.com/community",
+                summary="Free forever.",
+                order=0,
+            ),
+            Plan(
+                id="pro",
+                name="Pro",
+                license="FSL-1.1-Apache-2.0",
+                price=None,
+                cta_url="https://example.com/pro",
+                summary="Enterprise bits.",
+                order=1,
+            ),
+        ),
+        features=(
+            Feature(
+                id="core.proxy",
+                name="Proxy",
+                plans=("community", "pro"),
+            ),
+            Feature(
+                id="enterprise.sso",
+                name="SSO",
+                plans=("pro",),
+            ),
+        ),
+    )
+    body = render_manifests(config, "https://example.com")["/.well-known/plans.json"]
+    data = json.loads(body)
+    assert data["name"] == "Demo"
+    assert [p["id"] for p in data["plans"]] == ["community", "pro"]
+    community = data["plans"][0]
+    assert community["license"] == "MIT"
+    assert community["price"] == 0.0
+    # pro is contact-for-pricing
+    assert data["plans"][1]["price"] is None
+    # feature x edition matrix
+    sso = next(f for f in data["features"] if f["id"] == "enterprise.sso")
+    assert sso["plans"] == ["pro"]
+    proxy = next(f for f in data["features"] if f["id"] == "core.proxy")
+    assert "community" in proxy["plans"] and "pro" in proxy["plans"]
+
+
+def test_plans_manifest_empty_when_not_configured() -> None:
+    """A service with no plans still gets a well-formed empty manifest."""
+    body = render_manifests(_demo_config(), "https://demo.example.com")[
+        "/.well-known/plans.json"
+    ]
+    data = json.loads(body)
+    # demo config has no plans — manifest is still valid
+    assert data["plans"] == []
+    assert data["features"] == []
+    assert data["commerce"].endswith("/.well-known/commerce.json")
 
 
 def test_llms_txt_names_service_and_capability() -> None:
@@ -155,6 +225,7 @@ def test_build_router_serves_all_endpoints() -> None:
         "/.well-known/mcp.json",
         "/.well-known/agents-registry.json",
         "/.well-known/commerce.json",
+        "/.well-known/plans.json",
     ):
         r = client.get(path)
         assert r.status_code == 200, f"{path} returned {r.status_code}"

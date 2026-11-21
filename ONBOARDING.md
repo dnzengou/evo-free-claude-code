@@ -163,6 +163,7 @@ In the Admin UI you can:
 ## Next steps
 
 - Read [BLUEPRINT.md](BLUEPRINT.md) if you want to understand (or contribute to) EvoMetaClaw / EvoForge / SkillOpt.
+- Read [LICENSING.md](LICENSING.md) if you're deciding what to open-source vs. license commercially — strategy, best-in-class examples, and the FCC Community/Pro/Cloud editions model.
 - Read [ECOSYSTEM.md](ECOSYSTEM.md) if you're deploying across multiple products.
 - Read [agentseo/__init__.py](agentseo/__init__.py) if you want to bolt agent-SEO onto another service in your stack.
 - File an issue tagged `sales` or `support` for the hosted / integration offerings in `/.well-known/commerce.json`.
